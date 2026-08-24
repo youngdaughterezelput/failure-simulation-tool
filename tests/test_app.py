@@ -110,9 +110,7 @@ async def test_application_lifespan_manages_the_default_proxy_client() -> None:
     application = create_app(
         settings=Settings(target_api_url="http://localhost:9000")
     )
-
     assert application.state.proxy_client is None
-
     async with application.router.lifespan_context(application):
         managed_client = application.state.proxy_client
         assert not managed_client.is_closed

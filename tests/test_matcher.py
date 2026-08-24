@@ -13,7 +13,6 @@ def make_rule(*, enabled: bool = True) -> FailureRule:
 
 def test_matches_enabled_rule_by_exact_method_and_path() -> None:
     rule = make_rule()
-
     assert (
         find_matching_rule([rule], method="GET", path="/api/users") is rule
     )
