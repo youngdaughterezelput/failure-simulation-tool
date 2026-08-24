@@ -1,4 +1,6 @@
 from typing import Any
+from uuid import UUID, uuid4
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
@@ -28,10 +30,13 @@ class SimulatedResponse(BaseModel):
     delay_ms: int = Field(default=0, ge=0)
 
 
-class FailureRule(BaseModel):
+class RuleCreate(BaseModel):
     model_config = ConfigDict(frozen=True)
     name: str = Field(min_length=1)
     enabled: bool = True
     match: RequestMatch
     response: SimulatedResponse
 
+
+class FailureRule(RuleCreate):
+    id: UUID = Field(default_factory=uuid4)

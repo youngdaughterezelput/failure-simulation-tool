@@ -5,6 +5,7 @@ import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 
+from app.api.rules import router as rules_router
 from app.config import Settings
 from app.core.matcher import find_matching_rule
 from app.core.proxy import proxy_request
@@ -44,6 +45,7 @@ def create_app(
     application.state.settings = resolved_settings
     application.state.repository = resolved_repository
     application.state.proxy_client = proxy_client
+    application.include_router(rules_router)
 
     @application.get("/health", tags=["system"])
     async def health() -> dict[str, str]:
@@ -77,4 +79,3 @@ def create_app(
 
 
 app = create_app()
-

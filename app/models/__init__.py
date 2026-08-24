@@ -1,4 +1,3 @@
-from app.models.rule import FailureRule, RequestMatch, SimulatedResponse
+from app.models.rule import FailureRule, RequestMatch, RuleCreate, SimulatedResponse
 
-__all__ = ["FailureRule", "RequestMatch", "SimulatedResponse"]
-
+__all__ = ["FailureRule", "RequestMatch", "RuleCreate", "SimulatedResponse"]
