@@ -1,6 +1,6 @@
 # Failure Simulation Tool
 
-‼️A local QA tool for injecting controlled failures between an HTTP client and a
+A local QA tool for injecting controlled failures between an HTTP client and a
 real backend API. Matching requests receive a simulated response; unmatched
 requests are transparently forwarded to the configured target.
 
