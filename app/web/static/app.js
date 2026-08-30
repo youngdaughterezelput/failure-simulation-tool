@@ -1,4 +1,8 @@
 class ApiClient {
+  constructor(controlPrefix = "/_simulator") {
+    this.controlPrefix = controlPrefix;
+  }
+
   async request(path, options = {}) {
     const response = await fetch(path, {
       ...options,
@@ -17,9 +21,10 @@ class ApiClient {
     return body;
   }
 
-  get(path) { return this.request(path); }
-  post(path, body) { return this.request(path, { method: "POST", body: JSON.stringify(body) }); }
-  delete(path) { return this.request(path, { method: "DELETE" }); }
+  controlPath(path) { return `${this.controlPrefix}${path}`; }
+  get(path) { return this.request(this.controlPath(path)); }
+  post(path, body) { return this.request(this.controlPath(path), { method: "POST", body: JSON.stringify(body) }); }
+  delete(path) { return this.request(this.controlPath(path), { method: "DELETE" }); }
 
   errorMessage(body, status) {
     const detail = body?.detail || body;
@@ -46,6 +51,7 @@ class Dashboard {
     this.projects = [];
     this.rules = [];
     this.templates = [];
+    this.states = [];
     this.selectedProjectId = null;
   }
 
@@ -72,10 +78,11 @@ class Dashboard {
 
   async refreshAll() {
     try {
-      [this.projects, this.rules, this.templates] = await Promise.all([
+      [this.projects, this.rules, this.templates, this.states] = await Promise.all([
         this.api.get("/api/projects"),
         this.api.get("/api/rules"),
         this.api.get("/api/templates"),
+        this.api.get("/api/rules/states"),
       ]);
       if (!this.projects.some((item) => item.id === this.selectedProjectId)) {
         this.selectedProjectId = this.projects[0]?.id || null;
@@ -102,7 +109,8 @@ class Dashboard {
         const title = this.element("div", "card-title");
         title.append(this.element("strong", "", `${entry.method} ${entry.path}`));
         title.append(this.element("span", `badge ${entry.outcome}`, entry.outcome));
-        card.append(title, this.element("p", "", `HTTP ${entry.status_code} · ${entry.duration_ms} ms · ${new Date(entry.timestamp).toLocaleString()}`));
+        const reason = entry.decision_reason.replaceAll("_", " ");
+        card.append(title, this.element("p", "", `HTTP ${entry.status_code} · ${reason} · ${entry.duration_ms} ms · ${new Date(entry.timestamp).toLocaleString()}`));
         container.append(card);
       });
     } catch (error) {
@@ -127,6 +135,7 @@ class Dashboard {
       card.addEventListener("click", () => {
         this.selectedProjectId = project.id;
         this.renderProjects();
+        this.renderRuleForm();
         this.renderRules();
       });
       container.append(card);
@@ -150,6 +159,7 @@ class Dashboard {
     if (!visible.length) return container.append(this.empty("No rules in this project."));
     visible.forEach((rule) => {
       const reserved = this.isReservedPath(rule.match.path);
+      const state = this.states.find((item) => item.rule_id === rule.id) || { matched_count: 0, simulated_count: 0 };
       const card = this.element("article", "card");
       const title = this.element("div", "card-title");
       const identity = this.element("div", "");
@@ -164,10 +174,14 @@ class Dashboard {
       toggle.disabled = reserved && !rule.enabled;
       const remove = this.element("button", "text-button danger", "Delete");
       remove.addEventListener("click", () => this.deleteRule(rule.id));
-      actions.append(send, toggle, remove);
+      const reset = this.element("button", "text-button", "Reset");
+      reset.addEventListener("click", () => this.resetRule(rule.id));
+      actions.append(send, toggle, reset, remove);
       title.append(identity, actions);
-      const state = reserved ? "reserved local path · delete and recreate" : (rule.enabled ? "enabled" : "disabled");
-      card.append(title, this.element("p", "", `${rule.name} · HTTP ${rule.response.status} · ${state}`));
+      const status = reserved ? "reserved local path · delete and recreate" : (rule.enabled ? "enabled" : "disabled");
+      const limit = rule.behavior.max_simulations ?? "∞";
+      const behavior = `${Math.round(rule.behavior.probability * 100)}% · matched ${state.matched_count} · simulated ${state.simulated_count}/${limit}`;
+      card.append(title, this.element("p", "", `${rule.name} · HTTP ${rule.response.status} · ${status}`), this.element("p", "", behavior));
       container.append(card);
     });
   }
@@ -197,7 +211,7 @@ class Dashboard {
     const form = new FormData(formElement);
     const pathInput = formElement.querySelector("[name=path]");
     if (this.isReservedPath(form.get("path"))) {
-      const message = "This path is reserved by the simulator. Use a target API path such as /demo/rules or /api/orders.";
+      const message = "This path is reserved by the simulator control plane. Use a target API path such as /api/rules or /api/orders.";
       pathInput.setCustomValidity(message);
       pathInput.reportValidity();
       this.showMessage(message);
@@ -206,12 +220,19 @@ class Dashboard {
     const payload = {
       project_id: form.get("project_id"),
       match: { method: form.get("method"), path: form.get("path") },
+      behavior: {
+        probability: Number(form.get("probability")) / 100,
+        skip_matches: Number(form.get("skip_matches")),
+        max_simulations: form.get("max_simulations") ? Number(form.get("max_simulations")) : null,
+        seed: form.get("seed") ? Number(form.get("seed")) : null,
+      },
     };
     if (form.get("name")) payload.name = form.get("name");
     try {
       await this.api.post(`/api/rules/from-template/${form.get("template_id")}`, payload);
       formElement.querySelector("[name=name]").value = "";
       this.rules = await this.api.get("/api/rules");
+      this.states = await this.api.get("/api/rules/states");
       this.renderRules();
     } catch (error) { this.showMessage(error.message); }
   }
@@ -228,7 +249,20 @@ class Dashboard {
     try {
       const response = await this.api.send(rule.match.method, rule.match.path);
       this.showMessage(`${rule.match.method} ${rule.match.path} → HTTP ${response.status}`, "success");
-      await this.loadHistory();
+      [this.states] = await Promise.all([
+        this.api.get("/api/rules/states"),
+        this.loadHistory(),
+      ]);
+      this.renderRules();
+    } catch (error) { this.showMessage(error.message); }
+  }
+
+  async resetRule(id) {
+    try {
+      await this.api.post(`/api/rules/${id}/reset`);
+      this.states = await this.api.get("/api/rules/states");
+      this.renderRules();
+      this.showMessage("Rule counters reset", "success");
     } catch (error) { this.showMessage(error.message); }
   }
 
@@ -266,9 +300,7 @@ class Dashboard {
 
   empty(text) { return this.element("div", "empty", text); }
   isReservedPath(path) {
-    const exact = ["/", "/health", "/openapi.json"];
-    const prefixes = ["/api/history", "/api/projects", "/api/rules", "/api/templates", "/docs", "/redoc", "/static"];
-    return exact.includes(path) || prefixes.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+    return path === "/_simulator" || path.startsWith("/_simulator/");
   }
   element(tag, className = "", text = "") {
     const node = document.createElement(tag);

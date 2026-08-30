@@ -2,7 +2,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 
-from app.models import FailureRule, RuleCreate, RuleFromTemplateCreate
+from app.models import (
+    FailureRule,
+    RuleCreate,
+    RuleFromTemplateCreate,
+    RuleRuntimeState,
+)
 from app.services import ProjectNotFoundError, RuleService
 
 
@@ -23,6 +28,11 @@ def rule_not_found(rule_id: UUID) -> HTTPException:
 @router.get("", response_model=list[FailureRule])
 async def list_rules(request: Request) -> tuple[FailureRule, ...]:
     return get_rule_service(request).list()
+
+
+@router.get("/states", response_model=list[RuleRuntimeState])
+async def list_rule_states(request: Request) -> tuple[RuleRuntimeState, ...]:
+    return get_rule_service(request).list_states()
 
 
 @router.post("", response_model=FailureRule, status_code=status.HTTP_201_CREATED)
@@ -91,6 +101,17 @@ async def disable_rule(rule_id: UUID, request: Request) -> FailureRule:
     if rule is None:
         raise rule_not_found(rule_id)
     return rule
+
+
+@router.post("/{rule_id}/reset", response_model=RuleRuntimeState)
+async def reset_rule_state(
+    rule_id: UUID,
+    request: Request,
+) -> RuleRuntimeState:
+    state = get_rule_service(request).reset_state(rule_id)
+    if state is None:
+        raise rule_not_found(rule_id)
+    return state
 
 
 @router.delete("/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)

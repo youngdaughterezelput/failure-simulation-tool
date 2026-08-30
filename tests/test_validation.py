@@ -3,7 +3,7 @@ import math
 import pytest
 from pydantic import ValidationError
 
-from app.models import RequestMatch, SimulatedResponse
+from app.models import RequestMatch, RuleBehavior, SimulatedResponse
 from app.models.rule import MAX_BODY_BYTES, MAX_DELAY_MS, MAX_HEADER_BYTES
 
 
@@ -70,8 +70,29 @@ def test_rejects_body_over_size_limit() -> None:
 
 @pytest.mark.parametrize(
     "path",
-    ["/", "/health", "/api/rules", "/api/rules/example", "/static/app.js"],
+    [
+        "/_simulator",
+        "/_simulator/health",
+        "/_simulator/api/rules",
+        "/_simulator/static/app.js",
+    ],
 )
 def test_rejects_paths_reserved_by_the_simulator(path: str) -> None:
     with pytest.raises(ValidationError, match="path is reserved"):
         RequestMatch(method="GET", path=path)
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        {"probability": 0},
+        {"probability": 1.01},
+        {"skip_matches": -1},
+        {"skip_matches": 1_000_001},
+        {"max_simulations": 0},
+        {"max_simulations": 1_000_001},
+    ],
+)
+def test_rejects_invalid_rule_behavior(values: dict[str, object]) -> None:
+    with pytest.raises(ValidationError):
+        RuleBehavior(**values)  # type: ignore[arg-type]

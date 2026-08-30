@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Failure Simulation Tool</title>
-    <link rel="stylesheet" href="/static/styles.css?v=0.3.5">
+    <link rel="stylesheet" href="/_simulator/static/styles.css?v=0.4.0">
   </head>
   <body>
     <header class="topbar">
@@ -13,7 +13,7 @@
         <h1>Failure Simulation Tool</h1>
       </div>
       <nav>
-        <a href="/docs">API docs</a>
+        <a href="/_simulator/docs">API docs</a>
         <span id="health" class="health">Checking service…</span>
       </nav>
     </header>
@@ -74,6 +74,20 @@
                 <small id="path-hint" class="field-hint">Target API path; simulator management paths are reserved.</small>
               </label>
             </div>
+            <div class="behavior-grid">
+              <label>Probability, %
+                <input name="probability" type="number" min="0.1" max="100" step="0.1" value="100" required>
+              </label>
+              <label>Skip matches
+                <input name="skip_matches" type="number" min="0" max="1000000" value="0" required>
+              </label>
+              <label>Max simulations
+                <input name="max_simulations" type="number" min="1" max="1000000" placeholder="Unlimited">
+              </label>
+              <label>Seed
+                <input name="seed" type="number" placeholder="Random">
+              </label>
+            </div>
             <button type="submit">Create rule</button>
           </form>
         </section>
@@ -92,6 +106,6 @@
       </div>
     </main>
 
-    <script type="module" src="/static/app.js?v=0.3.5"></script>
+    <script type="module" src="/_simulator/static/app.js?v=0.4.0"></script>
   </body>
 </html>
