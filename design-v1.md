@@ -88,40 +88,10 @@ Suggested initial stack:
 - pytest for matcher and integration tests
 - in-memory configuration for the first vertical slice
 
-## Implementation order
+## Delivery plan
 
-### Iteration 1: headless vertical slice
-
-- application skeleton and health endpoint;
-- target URL configuration through an environment variable;
-- in-memory rule repository with one seed rule;
-- exact method/path matcher;
-- simulated response builder;
-- transparent forwarding of method, path, query, body, and safe headers;
-- integration tests using a disposable upstream API.
-
-### Iteration 2: management API
-
-- create, list, update, enable, disable, and delete rules;
-- validation for statuses, headers, body, and delay;
-- predefined HTTP failure templates;
-- OpenAPI examples and a small demo script.
-
-### Iteration 3: usable product shell
-
-- persistent storage (SQLite is sufficient initially);
-- request history marked as `simulated` or `proxied`;
-- minimal web UI for projects and rules;
-- Docker image and Docker Compose demo.
-
-### Later, only after usage validates the need
-
-- probability and request-count behaviours;
-- malformed or mutated upstream responses;
-- advanced request matching;
-- multiple projects and target APIs;
-- export/import of configurations;
-- Kubernetes deployment or cluster integrations.
+Implementation progress and planned iterations are tracked in the separate
+[Roadmap](roadmap.md).
 
 ## Explicit non-goals for the first version
 
@@ -134,15 +104,300 @@ Suggested initial stack:
 These are useful future directions, but they do not need to be solved before
 the core fault-injection proxy is proven.
 
-## First development task
+## Future direction: product and Kubernetes integration
 
-Build an executable FastAPI service with one hard-coded rule:
+The long-term direction is to let a product team connect a test environment,
+import its service configuration, and manage prepared failure scenarios through
+the UI.
+
+The simulator should not modify application code or inject invalid checks into
+running services. It should remain a controlled traffic intermediary: a
+matching request receives a simulated response, while an unmatched request is
+sent to the real service.
 
 ```text
-GET /api/users -> 503 simulated response
-all other requests -> target API
+                        Management UI
+                              |
+                     projects / rules / runs
+                              |
+                    Management API
+                              |
+           +------------------+------------------+
+           |                                     |
+     Local proxy mode                     Kubernetes mode
+           |                                     |
+     Target API URL                    Agent inside cluster
+                                                 |
+                                   services / ingress / routes
 ```
 
-Cover both branches with integration tests. This establishes the central
-abstraction of the project and provides a stable base for the management API
-and UI.
+### Product-oriented workflow
+
+A user creates or imports a product environment:
+
+```text
+Project: Payments
+Environment: QA
+Connection: payments-qa
+Namespace: payments-qa
+```
+
+The UI then presents the configured or discovered services:
+
+```text
+payment-api
+order-api
+billing-api
+notification-api
+```
+
+The user selects a service and activates a prepared scenario:
+
+```text
+Service: payment-api
+Endpoint: POST /api/payments
+Scenario: 503 Service Unavailable
+Duration: 15 minutes
+```
+
+The client must then send test traffic through a simulator address or through a
+temporary test-only route. The exact routing mechanism depends on the selected
+deployment mode.
+
+### Kubernetes connection modes
+
+Entering a cluster IP, username, and password is not the preferred connection
+model. Kubernetes access should use its native authentication and authorization
+mechanisms.
+
+#### Simulator deployed inside a cluster
+
+The initial Kubernetes version should be installed into a QA cluster with
+Helm. It receives a dedicated Kubernetes ServiceAccount and narrowly scoped
+RBAC permissions.
+
+```text
+Helm release
+├── Management API
+├── Web UI
+├── Simulator proxy
+└── Cluster integration component
+```
+
+Running inside the cluster provides access to internal service DNS names and
+does not require exposing the Kubernetes API or private backend services to an
+external system.
+
+The first permission set should be read-only and limited to selected
+namespaces. Automatic traffic changes require a separate, explicitly enabled
+permission set.
+
+#### Central control plane with a cluster agent
+
+When several products or clusters need one UI, a small agent can run in each
+cluster and establish an outbound authenticated connection to a central
+management service.
+
+```text
+Central UI and Management API
+              |
+        secure agent channel
+              |
+      +-------+-------+
+      |               |
+ QA cluster A    QA cluster B
+      |               |
+    agent           agent
+```
+
+This avoids storing broad cluster credentials in the central application and
+does not require opening the Kubernetes API to incoming internet traffic.
+
+Uploading a kubeconfig can be supported as a local development convenience,
+but it should not be the primary production deployment model.
+
+### Product configuration
+
+Each product should be able to keep a declarative configuration in its source
+repository. The same configuration can be imported through the UI, applied by
+a CLI, or delivered with a Helm release.
+
+An initial format could look like this:
+
+```yaml
+apiVersion: failure-simulator.io/v1
+kind: SimulationProject
+metadata:
+  name: payments
+spec:
+  environment: qa
+  namespace: payments-qa
+
+  services:
+    - name: payment-api
+      target: http://payment-api:8080
+      endpoints:
+        - method: POST
+          path: /api/payments
+        - method: GET
+          path: /api/payments/{id}
+
+  scenarios:
+    - name: payment-service-unavailable
+      enabled: false
+      match:
+        service: payment-api
+        method: POST
+        path: /api/payments
+      response:
+        status: 503
+        body:
+          error: service unavailable
+```
+
+This configuration gives the UI a product-specific catalogue of services,
+endpoints, and prepared scenarios without requiring a QA engineer to recreate
+them manually. Keeping it in Git also provides review, version history, and a
+path toward GitOps synchronization.
+
+Automatic discovery from Kubernetes Services, Ingress resources, or OpenAPI
+documents may complement this manifest later. Discovery should not replace an
+explicit product configuration because infrastructure metadata rarely contains
+all expected endpoints and QA scenarios.
+
+### Traffic routing strategies
+
+There are three possible levels of integration. They should be implemented in
+increasing order of operational risk.
+
+#### Explicit simulator URL
+
+The client uses a different base URL during a test run:
+
+```text
+Normal: frontend -> payment-api
+Test:   frontend -> failure simulator -> payment-api
+```
+
+This is the safest initial Kubernetes mode. The normal Kubernetes Service is
+not modified, and only clients intentionally configured for the test are
+affected.
+
+#### Dedicated proxy Service
+
+The platform exposes a stable test-only service for each target, for example:
+
+```text
+payment-api.simulator.qa
+```
+
+Test workloads use this address while ordinary workloads continue using the
+original `payment-api` Service.
+
+#### Transparent traffic interception
+
+The platform temporarily changes an Ingress, Service, sidecar, or service-mesh
+route so that existing traffic passes through the simulator.
+
+This provides the most convenient UX, but it also introduces the greatest
+operational risk. It requires reliable rollback, compatibility with the chosen
+Ingress or service mesh, strict environment controls, audit logging, and an
+automatic expiration time. It should only be considered after explicit proxy
+modes have been validated in real QA environments.
+
+### Future domain model
+
+The current in-memory `Rule` model will eventually need product and environment
+context:
+
+```text
+Project
+└── Environment
+    ├── Cluster connection
+    ├── Target services
+    ├── Endpoints
+    ├── Rules
+    └── Simulation runs
+```
+
+A target could be represented independently of the failure rule:
+
+```json
+{
+  "project": "payments",
+  "environment": "qa",
+  "target": {
+    "type": "kubernetes_service",
+    "cluster": "qa-cluster",
+    "namespace": "payments",
+    "service": "payment-api",
+    "port": 8080
+  }
+}
+```
+
+An enabled flag alone is insufficient once scenarios affect shared test
+environments. Activation should become a time-bounded `SimulationRun`:
+
+```text
+Scenario: Payment API unavailable
+Environment: payments-qa
+Started by: qa@example.com
+Status: active
+Expires after: 15 minutes
+```
+
+The run records who activated a scenario, its exact configuration, the target
+environment, its start and expiration times, and whether it stopped normally or
+was cancelled.
+
+### UI responsibilities
+
+The future UI should let a user:
+
+- create projects and environments;
+- connect or select a cluster integration;
+- import and validate a product manifest;
+- browse configured or discovered services and endpoints;
+- create rules from templates or custom responses;
+- start a time-bounded simulation run;
+- see which simulations are active and which traffic they affect;
+- stop one run or use an emergency stop for the environment;
+- inspect an audit history of simulated and proxied requests.
+
+The UI should always make the selected environment, affected service, routing
+mode, and expiration time visible before activation.
+
+### Safety requirements
+
+Cluster integration must be designed around limited blast radius:
+
+- production environments are denied by default;
+- allowed clusters and namespaces are explicitly configured;
+- agents and in-cluster components use least-privilege ServiceAccounts;
+- read-only discovery and traffic mutation use separate permissions;
+- every simulation has a maximum duration and automatic rollback;
+- all activations, changes, and cancellations are audited;
+- the UI exposes a prominent environment-wide emergency stop;
+- startup reconciliation disables or repairs stale routes after a restart;
+- product manifests are validated before any cluster change is applied.
+
+### Recommended delivery sequence
+
+This direction should be delivered incrementally:
+
+1. Complete the local management API and rule validation.
+2. Add projects, environments, and multiple target APIs.
+3. Build the UI around explicit proxy URLs.
+4. Add import and export of product manifests.
+5. Publish a Docker image and Helm chart for in-cluster deployment.
+6. Add read-only discovery of namespaces, Services, and Ingress resources.
+7. Introduce an agent for centrally managed multi-cluster installations.
+8. Add time-bounded simulation runs, audit history, and emergency stop.
+9. Only then evaluate automatic Ingress, Service, or service-mesh routing.
+
+The first useful product-level Kubernetes release therefore remains modest: a
+team installs the simulator into a QA cluster, imports its product manifest,
+and receives a UI with prepared services, endpoints, and scenarios. Clients use
+an explicit simulator URL, so the platform delivers immediate value without
+becoming a service mesh or silently changing shared traffic.

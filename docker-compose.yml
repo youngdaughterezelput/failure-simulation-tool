@@ -1,0 +1,27 @@
+services:
+  simulator:
+    build: .
+    environment:
+      DATABASE_PATH: /data/failure-simulator.db
+      TARGET_API_URL: http://upstream:9000
+    ports:
+      - "8080:8080"
+    volumes:
+      - simulator-data:/data
+    depends_on:
+      upstream:
+        condition: service_healthy
+
+  upstream:
+    build: .
+    command: ["python", "-m", "http.server", "9000", "--directory", "/tmp"]
+    expose:
+      - "9000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:9000')"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  simulator-data:
