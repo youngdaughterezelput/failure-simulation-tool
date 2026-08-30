@@ -33,6 +33,8 @@ templates. Response configuration is validated before a rule is stored:
 
 - [Documentation index](docs/README.md) — all project documents.
 - [Design v1](docs/design-v1.md) — product context, scope, and architecture.
+- [Application architecture and sequence diagrams](docs/application-architecture.md)
+  — module responsibilities and request flows.
 - [Control plane and proxy routing](docs/control-plane-routing.md) — why the
   simulator owns only `/_simulator/*`.
 - [Rule behaviours](docs/rule-behaviors.md) — probability, counters, state,

@@ -5,6 +5,8 @@ directory.
 
 - [Design v1](design-v1.md) describes the original problem, MVP, architecture,
   and longer-term product direction.
+- [Application architecture and sequence diagrams](application-architecture.md)
+  explains every layer, dependency boundaries, and the runtime request flows.
 - [Control plane and proxy routing](control-plane-routing.md) defines the
   `/_simulator/*` namespace and explains how requests are classified.
 - [Rule behaviours](rule-behaviors.md) defines probability and request-count
