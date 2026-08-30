@@ -20,19 +20,19 @@ GET /api/users -> 503 simulated response
 all other requests -> target API
 ```
 
-## Iteration 2: management API — in progress
+## Iteration 2: management API — completed
 
 - [x] Create, list, update, enable, disable, and delete rules.
-- [ ] Extend validation for statuses, headers, body, and delay.
-- [ ] Add predefined HTTP failure templates.
-- [ ] Add OpenAPI examples and a small demo script.
+- [x] Extend validation for statuses, headers, body, and delay.
+- [x] Add predefined HTTP failure templates.
+- [x] Add OpenAPI examples and a small demo script.
 
-## Iteration 3: usable product shell — planned
+## Iteration 3: usable product shell — completed
 
-- [ ] Add persistent storage; SQLite is sufficient initially.
-- [ ] Record request history with `simulated` or `proxied` outcomes.
-- [ ] Build a minimal web UI for projects and rules.
-- [ ] Provide a Docker image and Docker Compose demo.
+- [x] Add persistent storage; SQLite is sufficient initially.
+- [x] Record request history with `simulated` or `proxied` outcomes.
+- [x] Build a minimal web UI for projects and rules.
+- [x] Provide a Docker image and Docker Compose demo.
 
 ## Later
 

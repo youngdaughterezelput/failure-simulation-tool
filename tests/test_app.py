@@ -6,6 +6,7 @@ import pytest
 
 from app.config import Settings
 from app.main import create_app
+from app.repository import InMemoryRuleRepository, seed_rules
 
 
 @pytest.fixture
@@ -41,6 +42,7 @@ async def proxy_client(upstream_requests: list[httpx.Request],) -> AsyncIterator
 def app(proxy_client: httpx.AsyncClient):
     return create_app(
         settings=Settings(target_api_url="https://upstream.example/base"),
+        repository=InMemoryRuleRepository(seed_rules()),
         proxy_client=proxy_client,
     )
 
@@ -105,7 +107,8 @@ async def test_health_endpoint_is_handled_locally(
 @pytest.mark.asyncio
 async def test_application_lifespan_manages_the_default_proxy_client() -> None:
     application = create_app(
-        settings=Settings(target_api_url="http://localhost:9000")
+        settings=Settings(target_api_url="http://localhost:9000"),
+        repository=InMemoryRuleRepository(seed_rules()),
     )
     assert application.state.proxy_client is None
     async with application.router.lifespan_context(application):

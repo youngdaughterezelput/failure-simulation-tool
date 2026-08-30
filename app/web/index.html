@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Failure Simulation Tool</title>
+    <link rel="stylesheet" href="/static/styles.css?v=0.3.5">
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Local QA workspace</p>
+        <h1>Failure Simulation Tool</h1>
+      </div>
+      <nav>
+        <a href="/docs">API docs</a>
+        <span id="health" class="health">Checking service…</span>
+      </nav>
+    </header>
+
+    <main>
+      <section class="intro">
+        <div>
+          <p class="eyebrow">Controlled failures, visible outcomes</p>
+          <h2>Shape the unhappy path.</h2>
+          <p>Create a project, attach failure rules, then inspect whether each
+            request was simulated or proxied upstream.</p>
+        </div>
+        <button id="refresh-all" class="secondary" type="button">Refresh data</button>
+      </section>
+
+      <p id="message" class="message" role="status" hidden></p>
+
+      <div class="workspace">
+        <aside class="panel projects-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Workspace</p>
+              <h3>Projects</h3>
+            </div>
+          </div>
+          <div id="projects" class="stack"></div>
+          <form id="project-form" class="form-card">
+            <h4>New project</h4>
+            <label>Name<input name="name" required maxlength="100"></label>
+            <label>Description<textarea name="description" maxlength="1000"></textarea></label>
+            <button type="submit">Create project</button>
+          </form>
+        </aside>
+
+        <section class="panel rules-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Active configuration</p>
+              <h3>Rules</h3>
+            </div>
+            <span id="rule-count" class="count">0</span>
+          </div>
+          <div id="rules" class="stack"></div>
+          <form id="rule-form" class="form-card rule-form">
+            <h4>Rule from template</h4>
+            <label>Project<select name="project_id" required></select></label>
+            <label>Template<select name="template_id" required></select></label>
+            <label>Rule name<input name="name" maxlength="100" placeholder="Use template name"></label>
+            <div class="field-row">
+              <label>Method
+                <select name="method">
+                  <option>GET</option><option>POST</option><option>PUT</option>
+                  <option>PATCH</option><option>DELETE</option>
+                </select>
+              </label>
+              <label>Exact path
+                <input name="path" value="/api/example" required aria-describedby="path-hint">
+                <small id="path-hint" class="field-hint">Target API path; simulator management paths are reserved.</small>
+              </label>
+            </div>
+            <button type="submit">Create rule</button>
+          </form>
+        </section>
+
+        <section class="panel history-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Latest traffic</p>
+              <h3>Request history</h3>
+              <span id="history-updated" class="updated-at">Not refreshed yet</span>
+            </div>
+            <button id="refresh-history" class="icon-button" type="button" title="Refresh history" aria-label="Refresh history">↻</button>
+          </div>
+          <div id="history" class="stack"></div>
+        </section>
+      </div>
+    </main>
+
+    <script type="module" src="/static/app.js?v=0.3.5"></script>
+  </body>
+</html>
