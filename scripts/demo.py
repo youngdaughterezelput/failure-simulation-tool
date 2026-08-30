@@ -49,17 +49,17 @@ class ManagementApiDemo:
         self._client = client
 
     def run(self) -> None:
-        projects = self._client.request("GET", "/api/projects")
+        projects = self._client.request("GET", "/_simulator/api/projects")
         self._show("Available projects", projects)
         if projects.status != 200 or not projects.body:
             raise RuntimeError("no project is available for the demo rule")
 
-        templates = self._client.request("GET", "/api/templates")
+        templates = self._client.request("GET", "/_simulator/api/templates")
         self._show("Available templates", templates)
 
         created = self._client.request(
             "POST",
-            "/api/rules/from-template/service-unavailable",
+            "/_simulator/api/rules/from-template/service-unavailable",
             {
                 "name": "Demo outage",
                 "project_id": projects.body[0]["id"],
@@ -76,11 +76,11 @@ class ManagementApiDemo:
             self._show("Simulated request", simulated)
 
             disabled = self._client.request(
-                "POST", f"/api/rules/{rule_id}/disable"
+                "POST", f"/_simulator/api/rules/{rule_id}/disable"
             )
             self._show("Disabled rule", disabled)
         finally:
-            deleted = self._client.request("DELETE", f"/api/rules/{rule_id}")
+            deleted = self._client.request("DELETE", f"/_simulator/api/rules/{rule_id}")
             self._show("Deleted rule", deleted)
 
     @staticmethod

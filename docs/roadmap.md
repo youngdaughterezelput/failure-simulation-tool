@@ -34,9 +34,17 @@ all other requests -> target API
 - [x] Build a minimal web UI for projects and rules.
 - [x] Provide a Docker image and Docker Compose demo.
 
+## Iteration 4: routing and conditional behaviours — completed
+
+- [x] Isolate the management API and web UI under `/_simulator/*`.
+- [x] Allow upstream paths such as `/api/rules` to be simulated or proxied.
+- [x] Add probability-based triggering with an optional reproducible seed.
+- [x] Add skip-first-matches and maximum-simulation behaviours.
+- [x] Persist rule counters and expose an explicit reset action.
+- [x] Record the decision reason for simulated and proxied history entries.
+
 ## Later
 
-- [ ] Probability and request-count behaviours.
 - [ ] Malformed or mutated upstream responses.
 - [ ] Advanced request matching.
 - [ ] Multiple projects and target APIs.

@@ -1,8 +1,14 @@
 from uuid import UUID
 
-from app.models import FailureRule, RuleCreate, RuleFromTemplateCreate
+from app.models import (
+    FailureRule,
+    RuleCreate,
+    RuleFromTemplateCreate,
+    RuleRuntimeState,
+)
 from app.project_repository import ProjectRepository
 from app.repository import RuleRepository
+from app.runtime_repository import RuleRuntimeRepository
 from app.templates import FailureTemplateCatalog
 
 
@@ -14,10 +20,12 @@ class RuleService:
         repository: RuleRepository,
         template_catalog: FailureTemplateCatalog,
         project_repository: ProjectRepository,
+        runtime_repository: RuleRuntimeRepository,
     ) -> None:
         self._repository = repository
         self._template_catalog = template_catalog
         self._project_repository = project_repository
+        self._runtime_repository = runtime_repository
 
     def list(self) -> tuple[FailureRule, ...]:
         return self._repository.list()
@@ -39,6 +47,7 @@ class RuleService:
                 project_id=data.project_id,
                 match=data.match,
                 response=template.response,
+                behavior=data.behavior,
             )
         )
 
@@ -50,7 +59,21 @@ class RuleService:
         return self._repository.set_enabled(rule_id, enabled=enabled)
 
     def delete(self, rule_id: UUID) -> bool:
-        return self._repository.delete(rule_id)
+        deleted = self._repository.delete(rule_id)
+        if deleted:
+            self._runtime_repository.delete(rule_id)
+        return deleted
+
+    def list_states(self) -> tuple[RuleRuntimeState, ...]:
+        return tuple(
+            self._runtime_repository.get(rule.id)
+            for rule in self._repository.list()
+        )
+
+    def reset_state(self, rule_id: UUID) -> RuleRuntimeState | None:
+        if self._repository.get(rule_id) is None:
+            return None
+        return self._runtime_repository.reset(rule_id)
 
     def _validate_project(self, project_id: UUID | None) -> None:
         if (

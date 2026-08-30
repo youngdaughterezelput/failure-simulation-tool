@@ -1,3 +1,4 @@
+from app.models.behavior import DecisionReason, RuleBehavior, RuleRuntimeState
 from app.models.history import (
     RequestHistoryCreate,
     RequestHistoryEntry,
@@ -12,10 +13,13 @@ __all__ = [
     "FailureTemplate",
     "Project",
     "ProjectCreate",
+    "DecisionReason",
     "RequestMatch",
     "RequestHistoryCreate",
     "RequestHistoryEntry",
     "RequestOutcome",
+    "RuleBehavior",
+    "RuleRuntimeState",
     "RuleCreate",
     "RuleFromTemplateCreate",
     "SimulatedResponse",
