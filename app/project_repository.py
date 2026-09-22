@@ -55,6 +55,9 @@ class InMemoryProjectRepository:
         del self._projects[index]
         return True
 
+    def replace_all(self, projects: Sequence[Project]) -> None:
+        self._projects = list(projects)
+
     def _find_index(self, project_id: UUID) -> int | None:
         return next(
             (

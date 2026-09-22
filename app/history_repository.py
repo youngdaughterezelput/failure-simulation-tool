@@ -2,7 +2,12 @@ from collections.abc import Sequence
 from typing import Protocol
 
 from app.database import SQLiteDatabase
-from app.models import RequestHistoryCreate, RequestHistoryEntry, RequestOutcome
+from app.models import (
+    DecisionReason,
+    RequestHistoryCreate,
+    RequestHistoryEntry,
+    RequestOutcome,
+)
 
 
 class RequestHistoryRepository(Protocol):
@@ -34,8 +39,8 @@ class SQLiteRequestHistoryRepository:
         with self._database.connect() as connection:
             rows = connection.execute(
                 """
-                SELECT id, timestamp, method, path, outcome, status_code,
-                       rule_id, duration_ms
+                SELECT id, timestamp, method, path, outcome, decision_reason,
+                       status_code, rule_id, duration_ms
                 FROM request_history
                 ORDER BY id DESC
                 LIMIT ?
@@ -49,6 +54,15 @@ class SQLiteRequestHistoryRepository:
                 method=row["method"],
                 path=row["path"],
                 outcome=RequestOutcome(row["outcome"]),
+                decision_reason=(
+                    DecisionReason(row["decision_reason"])
+                    if row["decision_reason"]
+                    else (
+                        DecisionReason.ALWAYS
+                        if row["outcome"] == RequestOutcome.SIMULATED
+                        else DecisionReason.NO_MATCHING_RULE
+                    )
+                ),
                 status_code=row["status_code"],
                 rule_id=row["rule_id"],
                 duration_ms=row["duration_ms"],
@@ -61,15 +75,16 @@ class SQLiteRequestHistoryRepository:
             cursor = connection.execute(
                 """
                 INSERT INTO request_history (
-                    timestamp, method, path, outcome, status_code,
+                    timestamp, method, path, outcome, decision_reason, status_code,
                     rule_id, duration_ms
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     data.timestamp.isoformat(),
                     data.method,
                     data.path,
                     data.outcome.value,
+                    data.decision_reason.value,
                     data.status_code,
                     str(data.rule_id) if data.rule_id else None,
                     data.duration_ms,

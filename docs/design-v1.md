@@ -93,6 +93,33 @@ Suggested initial stack:
 Implementation progress and planned iterations are tracked in the separate
 [Roadmap](roadmap.md).
 
+## Portable configuration
+
+The local product supports export and import of projects and failure rules as
+a versioned JSON document. The document preserves project and rule identifiers
+and array order so references and first-match rule precedence survive a round
+trip.
+
+```json
+{
+  "kind": "failure-simulation-configuration",
+  "schema_version": 1,
+  "projects": [],
+  "rules": []
+}
+```
+
+Runtime counters, request history, predefined templates, and environment-backed
+settings such as the upstream target URL are deliberately excluded. They
+describe a running simulator instance rather than portable failure scenarios.
+
+Import validates the complete document and its project references before any
+write. Applying an import replaces projects and rules in one transaction,
+preserves request history, and resets rule runtime counters. A dry-run endpoint
+allows the UI and API clients to validate a document before confirming the
+replacement. Schema versions are explicit so future formats can be migrated or
+rejected without silently changing their meaning.
+
 ## Explicit non-goals for the first version
 
 - Kubernetes or service-mesh traffic management;

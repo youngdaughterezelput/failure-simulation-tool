@@ -32,7 +32,7 @@ async def client() -> AsyncIterator[httpx.AsyncClient]:
 async def test_lists_and_gets_predefined_failure_templates(
     client: httpx.AsyncClient,
 ) -> None:
-    response = await client.get("/api/templates")
+    response = await client.get("/_simulator/api/templates")
 
     assert response.status_code == 200
     template_ids = {template["id"] for template in response.json()}
@@ -45,7 +45,7 @@ async def test_lists_and_gets_predefined_failure_templates(
     } <= template_ids
 
     service_unavailable = await client.get(
-        "/api/templates/service-unavailable"
+        "/_simulator/api/templates/service-unavailable"
     )
     assert service_unavailable.status_code == 200
     assert service_unavailable.json()["response"] == {
@@ -64,7 +64,7 @@ async def test_creates_and_uses_rule_from_template(
     client: httpx.AsyncClient,
 ) -> None:
     create_response = await client.post(
-        "/api/rules/from-template/too-many-requests",
+        "/_simulator/api/rules/from-template/too-many-requests",
         json={
             "name": "Checkout is rate limited",
             "match": {"method": "post", "path": "/checkout"},
@@ -87,9 +87,9 @@ async def test_creates_and_uses_rule_from_template(
 async def test_returns_404_for_unknown_template(
     client: httpx.AsyncClient,
 ) -> None:
-    get_response = await client.get("/api/templates/does-not-exist")
+    get_response = await client.get("/_simulator/api/templates/does-not-exist")
     create_response = await client.post(
-        "/api/rules/from-template/does-not-exist",
+        "/_simulator/api/rules/from-template/does-not-exist",
         json={"match": {"method": "GET", "path": "/example"}},
     )
 
@@ -102,7 +102,7 @@ async def test_management_api_returns_422_for_unsafe_response(
     client: httpx.AsyncClient,
 ) -> None:
     response = await client.post(
-        "/api/rules",
+        "/_simulator/api/rules",
         json={
             "name": "Unsafe response",
             "match": {"method": "GET", "path": "/unsafe"},
@@ -121,7 +121,7 @@ async def test_management_api_returns_422_for_unsafe_response(
 async def test_openapi_contains_management_examples(
     client: httpx.AsyncClient,
 ) -> None:
-    schema = (await client.get("/openapi.json")).json()
+    schema = (await client.get("/_simulator/openapi.json")).json()
 
     assert schema["components"]["schemas"]["RuleCreate"]["examples"]
     assert schema["components"]["schemas"]["RuleFromTemplateCreate"][

@@ -31,12 +31,20 @@ CREATE TABLE IF NOT EXISTS rules (
 
 CREATE INDEX IF NOT EXISTS rules_project_id_idx ON rules(project_id);
 
+CREATE TABLE IF NOT EXISTS rule_runtime_state (
+    rule_id TEXT PRIMARY KEY REFERENCES rules(id) ON DELETE CASCADE,
+    matched_count INTEGER NOT NULL DEFAULT 0,
+    simulated_count INTEGER NOT NULL DEFAULT 0,
+    last_triggered_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS request_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp TEXT NOT NULL,
     method TEXT NOT NULL,
     path TEXT NOT NULL,
     outcome TEXT NOT NULL CHECK (outcome IN ('simulated', 'proxied')),
+    decision_reason TEXT,
     status_code INTEGER NOT NULL,
     rule_id TEXT,
     duration_ms INTEGER NOT NULL
@@ -99,6 +107,8 @@ class SQLiteDatabase:
                 self._memory_keeper = connection
             try:
                 connection.executescript(SCHEMA)
+                self._migrate_schema(connection)
+                connection.commit()
                 connection.execute("BEGIN IMMEDIATE")
                 seeded = connection.execute(
                     "SELECT value FROM metadata WHERE key = 'initial_seed'"
@@ -114,6 +124,19 @@ class SQLiteDatabase:
                 if not self._is_memory:
                     connection.close()
             self._initialized = True
+
+    @staticmethod
+    def _migrate_schema(connection: sqlite3.Connection) -> None:
+        history_columns = {
+            row["name"]
+            for row in connection.execute(
+                "PRAGMA table_info(request_history)"
+            ).fetchall()
+        }
+        if "decision_reason" not in history_columns:
+            connection.execute(
+                "ALTER TABLE request_history ADD COLUMN decision_reason TEXT"
+            )
 
     def _open_connection(self) -> sqlite3.Connection:
         connection = sqlite3.connect(

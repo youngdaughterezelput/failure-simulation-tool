@@ -73,6 +73,9 @@ class InMemoryRuleRepository:
     def count_for_project(self, project_id: UUID) -> int:
         return sum(rule.project_id == project_id for rule in self._rules)
 
+    def replace_all(self, rules: Sequence[FailureRule]) -> None:
+        self._rules = list(rules)
+
     def _find_index(self, rule_id: UUID) -> int | None:
         return next(
             (index for index, rule in enumerate(self._rules) if rule.id == rule_id),

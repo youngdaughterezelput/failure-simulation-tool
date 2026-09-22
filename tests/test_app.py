@@ -98,7 +98,7 @@ async def test_health_endpoint_is_handled_locally(
         transport=httpx.ASGITransport(app=app),
         base_url="http://simulator.test",
     ) as client:
-        response = await client.get("/health")
+        response = await client.get("/_simulator/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
     assert upstream_requests == []
@@ -126,7 +126,7 @@ async def test_rule_management_lifecycle(
         base_url="http://simulator.test",
     ) as client:
         create_response = await client.post(
-            "/api/rules",
+            "/_simulator/api/rules",
             json={
                 "name": "Payments unavailable",
                 "match": {"method": "get", "path": "/payments"},
@@ -143,12 +143,12 @@ async def test_rule_management_lifecycle(
         assert created_rule["match"]["method"] == "GET"
         assert created_rule["enabled"] is True
 
-        list_response = await client.get("/api/rules")
+        list_response = await client.get("/_simulator/api/rules")
         assert list_response.status_code == 200
         assert rule_id in {rule["id"] for rule in list_response.json()}
 
         update_response = await client.put(
-            f"/api/rules/{rule_id}",
+            f"/_simulator/api/rules/{rule_id}",
             json={
                 "name": "Payments rate limited",
                 "match": {"method": "GET", "path": "/payments"},
@@ -164,7 +164,7 @@ async def test_rule_management_lifecycle(
         assert update_response.json()["id"] == rule_id
         assert update_response.json()["name"] == "Payments rate limited"
 
-        disable_response = await client.post(f"/api/rules/{rule_id}/disable")
+        disable_response = await client.post(f"/_simulator/api/rules/{rule_id}/disable")
         assert disable_response.status_code == 200
         assert disable_response.json()["enabled"] is False
 
@@ -172,7 +172,7 @@ async def test_rule_management_lifecycle(
         assert proxied_response.status_code == 201
         assert proxied_response.json()["source"] == "upstream"
 
-        enable_response = await client.post(f"/api/rules/{rule_id}/enable")
+        enable_response = await client.post(f"/_simulator/api/rules/{rule_id}/enable")
         assert enable_response.status_code == 200
         assert enable_response.json()["enabled"] is True
 
@@ -181,10 +181,10 @@ async def test_rule_management_lifecycle(
         assert simulated_response.headers["retry-after"] == "10"
         assert simulated_response.json() == {"error": "rate limited"}
 
-        delete_response = await client.delete(f"/api/rules/{rule_id}")
+        delete_response = await client.delete(f"/_simulator/api/rules/{rule_id}")
         assert delete_response.status_code == 204
 
-        rules_after_delete = (await client.get("/api/rules")).json()
+        rules_after_delete = (await client.get("/_simulator/api/rules")).json()
         assert rule_id not in {rule["id"] for rule in rules_after_delete}
 
     assert len(upstream_requests) == 1
@@ -198,7 +198,7 @@ async def test_rule_management_returns_404_for_unknown_rule(app) -> None:
         transport=httpx.ASGITransport(app=app),
         base_url="http://simulator.test",
     ) as client:
-        response = await client.post(f"/api/rules/{unknown_rule_id}/disable")
+        response = await client.post(f"/_simulator/api/rules/{unknown_rule_id}/disable")
 
     assert response.status_code == 404
     assert response.json() == {

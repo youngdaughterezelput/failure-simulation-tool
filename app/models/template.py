@@ -2,6 +2,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.models.behavior import RuleBehavior
 from app.models.rule import RequestMatch, SimulatedResponse
 
 
@@ -24,6 +25,7 @@ class RuleFromTemplateCreate(BaseModel):
                     "enabled": True,
                     "project_id": "00000000-0000-0000-0000-000000000001",
                     "match": {"method": "POST", "path": "/api/checkout"},
+                    "behavior": {"probability": 1, "max_simulations": 3},
                 }
             ]
         },
@@ -33,3 +35,4 @@ class RuleFromTemplateCreate(BaseModel):
     enabled: bool = True
     project_id: UUID | None = None
     match: RequestMatch
+    behavior: RuleBehavior = Field(default_factory=RuleBehavior)

@@ -12,6 +12,9 @@ from pydantic import (
     model_validator,
 )
 
+from app.constants import CONTROL_PREFIX
+from app.models.behavior import RuleBehavior
+
 
 HTTP_TOKEN_PATTERN = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$")
 FORBIDDEN_RESPONSE_HEADERS = {
@@ -30,20 +33,11 @@ MAX_DELAY_MS = 60_000
 MAX_BODY_BYTES = 1_048_576
 MAX_HEADER_COUNT = 100
 MAX_HEADER_BYTES = 16_384
-RESERVED_EXACT_PATHS = {"/", "/health", "/openapi.json"}
-RESERVED_PATH_PREFIXES = (
-    "/api/history",
-    "/api/projects",
-    "/api/rules",
-    "/api/templates",
-    "/docs",
-    "/redoc",
-    "/static",
-)
+RESERVED_PATH_PREFIXES = (CONTROL_PREFIX,)
 
 
 def is_reserved_path(path: str) -> bool:
-    return path in RESERVED_EXACT_PATHS or any(
+    return any(
         path == prefix or path.startswith(f"{prefix}/")
         for prefix in RESERVED_PATH_PREFIXES
     )
@@ -125,7 +119,7 @@ class RequestMatch(BaseModel):
         )
         if is_reserved_path(value) and not allow_reserved:
             raise ValueError(
-                "path is reserved by the simulator management API or web UI"
+                "path is reserved by the simulator control plane"
             )
         return value
 
@@ -173,6 +167,11 @@ class RuleCreate(BaseModel):
                         "body": {"error": "too many requests"},
                         "delay_ms": 250,
                     },
+                    "behavior": {
+                        "probability": 0.3,
+                        "max_simulations": 5,
+                        "seed": 42,
+                    },
                 }
             ]
         },
@@ -182,6 +181,7 @@ class RuleCreate(BaseModel):
     project_id: UUID | None = None
     match: RequestMatch
     response: SimulatedResponse
+    behavior: RuleBehavior = Field(default_factory=RuleBehavior)
 
 
 class FailureRule(RuleCreate):
