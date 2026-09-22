@@ -1,71 +1,58 @@
 import logging
-from datetime import UTC, datetime
-from uuid import UUID
+from typing import Protocol
 
-from app.history_repository import RequestHistoryRepository
+from app.history_repository import (
+    HistoryPersistenceError,
+    RequestHistoryReader,
+    RequestHistoryWriter,
+)
+from app.infrastructure.clock import Clock
 from app.models import (
-    DecisionReason,
+    HistoryQuery,
+    RecordRequestCommand,
     RequestHistoryCreate,
     RequestHistoryEntry,
-    RequestOutcome,
 )
 
 
 logger = logging.getLogger(__name__)
 
 
-class RequestHistoryService:
-    def __init__(self, repository: RequestHistoryRepository) -> None:
-        self._repository = repository
+class RequestHistoryQueryService:
+    def __init__(self, reader: RequestHistoryReader) -> None:
+        self._reader = reader
 
-    def list(self, *, limit: int) -> tuple[RequestHistoryEntry, ...]:
-        return self._repository.list(limit=limit)
+    def list(self, query: HistoryQuery) -> tuple[RequestHistoryEntry, ...]:
+        return self._reader.list(query)
 
-    def record(
-        self,
-        *,
-        method: str,
-        path: str,
-        outcome: RequestOutcome,
-        decision_reason: DecisionReason,
-        status_code: int,
-        duration_ms: int,
-        rule_id: UUID | None = None,
-    ) -> RequestHistoryEntry:
-        return self._repository.create(
+
+class RequestHistoryRecorder(Protocol):
+    def record(self, command: RecordRequestCommand,) -> RequestHistoryEntry | None: ...
+
+
+class PersistentRequestHistoryRecorder:
+    def __init__(self, writer: RequestHistoryWriter, clock: Clock) -> None:
+        self._writer = writer
+        self._clock = clock
+
+    def record(self, command: RecordRequestCommand) -> RequestHistoryEntry:
+        return self._writer.create(
             RequestHistoryCreate(
-                timestamp=datetime.now(UTC),
-                method=method,
-                path=path,
-                outcome=outcome,
-                decision_reason=decision_reason,
-                status_code=status_code,
-                rule_id=rule_id,
-                duration_ms=duration_ms,
+                timestamp=self._clock.now(),
+                **command.model_dump(),
             )
         )
 
-    def record_safely(
-        self,
-        *,
-        method: str,
-        path: str,
-        outcome: RequestOutcome,
-        decision_reason: DecisionReason,
-        status_code: int,
-        duration_ms: int,
-        rule_id: UUID | None = None,
-    ) -> RequestHistoryEntry | None:
+
+class BestEffortRequestHistoryRecorder:
+    """Suppresses expected history-storage failures on the data plane"""
+
+    def __init__(self, recorder: RequestHistoryRecorder) -> None:
+        self._recorder = recorder
+
+    def record(self, command: RecordRequestCommand,) -> RequestHistoryEntry | None:
         try:
-            return self.record(
-                method=method,
-                path=path,
-                outcome=outcome,
-                decision_reason=decision_reason,
-                status_code=status_code,
-                duration_ms=duration_ms,
-                rule_id=rule_id,
-            )
-        except Exception:
+            return self._recorder.record(command)
+        except HistoryPersistenceError:
             logger.exception("Could not persist request history")
             return None

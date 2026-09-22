@@ -104,7 +104,7 @@ GET    /_simulator/api/templates
 GET    /_simulator/api/templates/{template_id}
 POST   /_simulator/api/rules/from-template/{template_id}
 
-GET    /_simulator/api/history?limit=100
+GET    /_simulator/api/history?limit=100&before_id={entry_id}
 
 GET    /_simulator/api/configuration/export
 POST   /_simulator/api/configuration/import?dry_run=false

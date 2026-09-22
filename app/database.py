@@ -50,8 +50,8 @@ CREATE TABLE IF NOT EXISTS request_history (
     duration_ms INTEGER NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS request_history_timestamp_idx
-    ON request_history(timestamp DESC);
+CREATE INDEX IF NOT EXISTS request_history_id_desc_idx
+    ON request_history(id DESC);
 """
 
 

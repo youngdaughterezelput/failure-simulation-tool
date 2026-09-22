@@ -1,11 +1,10 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from time import perf_counter
 
 import httpx
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from app.api.configuration import router as configuration_router
@@ -21,16 +20,21 @@ from app.configuration_repository import (
 )
 from app.constants import CONTROL_PREFIX
 from app.core.decision import RuleDecisionEngine
-from app.core.matcher import find_matching_rule
-from app.core.proxy import proxy_request
-from app.core.response import build_simulated_response
+from app.core.executor import RequestExecutor
 from app.database import SQLiteDatabase
 from app.history_repository import (
     InMemoryRequestHistoryRepository,
     RequestHistoryRepository,
     SQLiteRequestHistoryRepository,
 )
-from app.models import DecisionReason, RequestOutcome
+from app.infrastructure.clock import (
+    Clock,
+    MonotonicClock,
+    SystemClock,
+    SystemMonotonicClock,
+    elapsed_milliseconds,
+)
+from app.models import RecordRequestCommand
 from app.project_repository import (
     InMemoryProjectRepository,
     ProjectRepository,
@@ -49,9 +53,11 @@ from app.runtime_repository import (
     SQLiteRuleRuntimeRepository,
 )
 from app.services import (
+    BestEffortRequestHistoryRecorder,
     ConfigurationService,
+    PersistentRequestHistoryRecorder,
     ProjectService,
-    RequestHistoryService,
+    RequestHistoryQueryService,
     RuleService,
 )
 from app.templates import FailureTemplateCatalog
@@ -71,6 +77,8 @@ def create_app(
     configuration_repository: ConfigurationRepository | None = None,
     template_catalog: FailureTemplateCatalog | None = None,
     proxy_client: httpx.AsyncClient | None = None,
+    clock: Clock | None = None,
+    monotonic_clock: MonotonicClock | None = None,
 ) -> FastAPI:
     resolved_settings = settings or Settings.from_environment()
     if (
@@ -179,12 +187,24 @@ def create_app(
         resolved_project_repository,
         resolved_repository,
     )
-    application.state.history_service = RequestHistoryService(
+    application.state.history_query_service = RequestHistoryQueryService(
         resolved_history_repository
     )
-    application.state.decision_engine = RuleDecisionEngine(
+    decision_engine = RuleDecisionEngine(
         resolved_runtime_repository
     )
+    application.state.request_executor = RequestExecutor(
+        resolved_repository,
+        decision_engine,
+        resolved_settings.target_api_url,
+    )
+    application.state.history_recorder = BestEffortRequestHistoryRecorder(
+        PersistentRequestHistoryRecorder(
+            resolved_history_repository,
+            clock or SystemClock(),
+        )
+    )
+    application.state.monotonic_clock = monotonic_clock or SystemMonotonicClock()
     application.state.proxy_client = proxy_client
     application.include_router(configuration_router, prefix=CONTROL_PREFIX)
     application.include_router(projects_router, prefix=CONTROL_PREFIX)
@@ -213,55 +233,26 @@ def create_app(
     )
     async def simulate_or_proxy(request: Request, path: str) -> Response:
         del path  # Routing consumes the path; matching uses the canonical request URL.
-        started_at = perf_counter()
-        rule = find_matching_rule(
-            application.state.repository.list(),
-            method=request.method,
-            path=request.url.path,
+        started_ns = application.state.monotonic_clock.now_ns()
+        result = await application.state.request_executor.execute(
+            request,
+            application.state.proxy_client,
         )
-        if rule is not None:
-            decision = application.state.decision_engine.decide(rule)
-            if decision.simulate:
-                response = await build_simulated_response(rule.response)
-                application.state.history_service.record_safely(
-                    method=request.method,
-                    path=request.url.path,
-                    outcome=RequestOutcome.SIMULATED,
-                    decision_reason=decision.reason,
-                    status_code=response.status_code,
-                    rule_id=rule.id,
-                    duration_ms=int((perf_counter() - started_at) * 1000),
-                )
-                return response
-            matched_rule_id = rule.id
-            decision_reason = decision.reason
-        else:
-            matched_rule_id = None
-            decision_reason = DecisionReason.NO_MATCHING_RULE
-        try:
-            response = await proxy_request(
-                request,
-                target_api_url=application.state.settings.target_api_url,
-                client=application.state.proxy_client,
+        application.state.history_recorder.record(
+            RecordRequestCommand(
+                method=request.method,
+                path=request.url.path,
+                outcome=result.outcome,
+                decision_reason=result.decision_reason,
+                status_code=result.response.status_code,
+                rule_id=result.rule_id,
+                duration_ms=elapsed_milliseconds(
+                    started_ns=started_ns,
+                    finished_ns=application.state.monotonic_clock.now_ns(),
+                ),
             )
-        except httpx.RequestError as error:
-            response = JSONResponse(
-                status_code=502,
-                content={
-                    "error": "upstream request failed",
-                    "detail": str(error),
-                },
-            )
-        application.state.history_service.record_safely(
-            method=request.method,
-            path=request.url.path,
-            outcome=RequestOutcome.PROXIED,
-            decision_reason=decision_reason,
-            status_code=response.status_code,
-            rule_id=matched_rule_id,
-            duration_ms=int((perf_counter() - started_at) * 1000),
         )
-        return response
+        return result.response
     return application
 
 

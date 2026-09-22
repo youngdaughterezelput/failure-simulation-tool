@@ -59,8 +59,9 @@ This module wires the application together:
 - reads `Settings`;
 - creates SQLite repositories for normal startup or in-memory repositories
   when dependencies are injected by tests;
-- creates `ProjectService`, `RuleService`, `RequestHistoryService`,
-  `ConfigurationService`, and `RuleDecisionEngine`;
+- creates `ProjectService`, `RuleService`, `RequestHistoryQueryService`,
+  a decorated request-history recorder, `ConfigurationService`, and
+  `RuleDecisionEngine`;
 - mounts the UI and control-plane routers at `/_simulator`;
 - processes all data-plane traffic in `simulate_or_proxy`;
 - owns the reusable HTTPX client and converts upstream connection failures into
@@ -91,8 +92,11 @@ Services implement management use cases:
 - `ProjectService` prevents deletion of a project that still contains rules;
 - `RuleService` validates project references, creates rules from templates,
   changes enabled state, deletes rules, lists counter states, and resets them;
-- `RequestHistoryService` creates history entries and offers `record_safely`,
-  ensuring a history-storage error does not break the proxied client request;
+- `RequestHistoryQueryService` reads cursor-paginated history through a
+  reader-only protocol;
+- `PersistentRequestHistoryRecorder` turns an immutable command into a stored
+  entry using an injected clock; `BestEffortRequestHistoryRecorder` decorates
+  it to isolate expected storage errors from the data plane;
 - `ConfigurationService` exports portable configuration and delegates atomic
   replacement to an aggregate repository.
 
@@ -205,7 +209,7 @@ sequenceDiagram
     participant Builder as ResponseBuilder
     participant Proxy
     participant Upstream
-    participant History as RequestHistoryService
+    participant History as RequestHistoryRecorder
     participant HistoryRepo as HistoryRepository
 
     Client->>Main: HTTP method + path + query + headers + body

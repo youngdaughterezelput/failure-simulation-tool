@@ -8,7 +8,7 @@ from app.config import Settings
 from app.database import SQLiteDatabase
 from app.history_repository import SQLiteRequestHistoryRepository
 from app.main import create_app
-from app.models import DecisionReason
+from app.models import DecisionReason, HistoryQuery
 from app.project_repository import seed_projects
 from app.repository import (
     InMemoryRuleRepository,
@@ -288,7 +288,9 @@ def test_sqlite_migrates_legacy_history_schema(tmp_path) -> None:
         )
 
     database = SQLiteDatabase(str(database_path))
-    history = SQLiteRequestHistoryRepository(database).list(limit=10)
+    history = SQLiteRequestHistoryRepository(database).list(
+        HistoryQuery(limit=10)
+    )
 
     assert history[0].decision_reason is DecisionReason.NO_MATCHING_RULE
     with database.connect() as connection:

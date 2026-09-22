@@ -4,6 +4,8 @@ from app.models.configuration import (
     ConfigurationImportResult,
 )
 from app.models.history import (
+    HistoryQuery,
+    RecordRequestCommand,
     RequestHistoryCreate,
     RequestHistoryEntry,
     RequestOutcome,
@@ -21,6 +23,8 @@ __all__ = [
     "ProjectCreate",
     "DecisionReason",
     "RequestMatch",
+    "HistoryQuery",
+    "RecordRequestCommand",
     "RequestHistoryCreate",
     "RequestHistoryEntry",
     "RequestOutcome",
