@@ -46,6 +46,7 @@ main { margin: 0 auto; max-width: 1600px; padding: 42px clamp(20px, 4vw, 64px) 6
 .intro { align-items: end; display: flex; justify-content: space-between; margin-bottom: 34px; }
 .intro h2 { font-size: clamp(34px, 4vw, 58px); letter-spacing: -.055em; margin: 8px 0; }
 .intro p:last-child { color: var(--muted); margin: 0; max-width: 620px; }
+.intro-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .workspace { display: grid; gap: 18px; grid-template-columns: minmax(230px, .8fr) minmax(360px, 1.35fr) minmax(300px, 1fr); }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; min-width: 0; padding: 20px; }
 .panel-heading { align-items: center; display: flex; justify-content: space-between; margin-bottom: 18px; }
@@ -99,6 +100,7 @@ button.secondary { background: transparent; border: 1px solid var(--line); color
 @media (max-width: 720px) {
   .topbar, .intro { align-items: flex-start; gap: 18px; }
   .topbar, .intro { flex-direction: column; }
+  .intro-actions { justify-content: flex-start; }
   .workspace { grid-template-columns: 1fr; }
   .history-panel { grid-column: auto; }
   .behavior-grid { grid-template-columns: 1fr; }

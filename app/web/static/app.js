@@ -26,6 +26,24 @@ class ApiClient {
   post(path, body) { return this.request(this.controlPath(path), { method: "POST", body: JSON.stringify(body) }); }
   delete(path) { return this.request(this.controlPath(path), { method: "DELETE" }); }
 
+  async download(path, fallbackName) {
+    const response = await fetch(this.controlPath(path), { cache: "no-store" });
+    if (!response.ok) {
+      const text = await response.text();
+      let body = text;
+      try { body = JSON.parse(text); } catch { /* Keep the response text. */ }
+      throw new Error(this.errorMessage(body, response.status));
+    }
+    const disposition = response.headers.get("content-disposition") || "";
+    const match = disposition.match(/filename="?([^";]+)"?/i);
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = match?.[1] || fallbackName;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   errorMessage(body, status) {
     const detail = body?.detail || body;
     if (Array.isArray(detail)) {
@@ -69,6 +87,11 @@ class Dashboard {
     document.querySelector("#refresh-history").addEventListener("click", (event) => {
       this.runRefresh(event.currentTarget, () => this.loadHistory(), "↻");
     });
+    document.querySelector("#export-configuration").addEventListener("click", () => this.exportConfiguration());
+    document.querySelector("#import-configuration").addEventListener("click", () => {
+      document.querySelector("#configuration-file").click();
+    });
+    document.querySelector("#configuration-file").addEventListener("change", (event) => this.importConfiguration(event));
     document.querySelector("#project-form").addEventListener("submit", (event) => this.createProject(event));
     document.querySelector("#rule-form").addEventListener("submit", (event) => this.createRule(event));
     document.querySelector("#rule-form [name=path]").addEventListener("input", (event) => {
@@ -196,6 +219,46 @@ class Dashboard {
       this.selectedProjectId = project.id;
       await this.refreshAll();
     } catch (error) { this.showMessage(error.message); }
+  }
+
+  async exportConfiguration() {
+    try {
+      await this.api.download(
+        "/api/configuration/export",
+        "failure-simulation-config-v1.json",
+      );
+      this.showMessage("Configuration exported", "success");
+    } catch (error) { this.showMessage(error.message); }
+  }
+
+  async importConfiguration(event) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      const document = JSON.parse(await file.text());
+      const validation = await this.api.post(
+        "/api/configuration/import?dry_run=true",
+        document,
+      );
+      const confirmed = window.confirm(
+        `Replace the current configuration with ${validation.projects_imported} projects and ${validation.rules_imported} rules? Rule counters will be reset.`,
+      );
+      if (!confirmed) return;
+      const result = await this.api.post("/api/configuration/import", document);
+      await this.refreshAll();
+      this.showMessage(
+        `Imported ${result.projects_imported} projects and ${result.rules_imported} rules`,
+        "success",
+      );
+    } catch (error) {
+      const message = error instanceof SyntaxError
+        ? "The selected file is not valid JSON"
+        : error.message;
+      this.showMessage(message);
+    } finally {
+      input.value = "";
+    }
   }
 
   async deleteProject(id) {

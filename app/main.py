@@ -8,11 +8,17 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from app.api.configuration import router as configuration_router
 from app.api.history import router as history_router
 from app.api.projects import router as projects_router
 from app.api.rules import router as rules_router
 from app.api.templates import router as templates_router
 from app.config import Settings
+from app.configuration_repository import (
+    ConfigurationRepository,
+    InMemoryConfigurationRepository,
+    SQLiteConfigurationRepository,
+)
 from app.constants import CONTROL_PREFIX
 from app.core.decision import RuleDecisionEngine
 from app.core.matcher import find_matching_rule
@@ -42,7 +48,12 @@ from app.runtime_repository import (
     RuleRuntimeRepository,
     SQLiteRuleRuntimeRepository,
 )
-from app.services import ProjectService, RequestHistoryService, RuleService
+from app.services import (
+    ConfigurationService,
+    ProjectService,
+    RequestHistoryService,
+    RuleService,
+)
 from app.templates import FailureTemplateCatalog
 
 
@@ -57,6 +68,7 @@ def create_app(
     project_repository: ProjectRepository | None = None,
     history_repository: RequestHistoryRepository | None = None,
     runtime_repository: RuleRuntimeRepository | None = None,
+    configuration_repository: ConfigurationRepository | None = None,
     template_catalog: FailureTemplateCatalog | None = None,
     proxy_client: httpx.AsyncClient | None = None,
 ) -> FastAPI:
@@ -82,6 +94,10 @@ def create_app(
         resolved_runtime_repository: RuleRuntimeRepository = (
             SQLiteRuleRuntimeRepository(database)
         )
+        resolved_configuration_repository = (
+            configuration_repository
+            or SQLiteConfigurationRepository(database)
+        )
     else:
         resolved_repository = repository or InMemoryRuleRepository(seed_rules())
         resolved_project_repository = (
@@ -93,6 +109,31 @@ def create_app(
         resolved_runtime_repository = (
             runtime_repository or InMemoryRuleRuntimeRepository()
         )
+        if configuration_repository is not None:
+            resolved_configuration_repository = configuration_repository
+        elif (
+            isinstance(
+                resolved_project_repository,
+                InMemoryProjectRepository,
+            )
+            and isinstance(resolved_repository, InMemoryRuleRepository)
+            and isinstance(
+                resolved_runtime_repository,
+                InMemoryRuleRuntimeRepository,
+            )
+        ):
+            resolved_configuration_repository = (
+                InMemoryConfigurationRepository(
+                    resolved_project_repository,
+                    resolved_repository,
+                    resolved_runtime_repository,
+                )
+            )
+        else:
+            raise ValueError(
+                "configuration_repository is required when injecting "
+                "custom repositories"
+            )
     resolved_template_catalog = (
         template_catalog or FailureTemplateCatalog.predefined()
     )
@@ -111,7 +152,7 @@ def create_app(
 
     application = FastAPI(
         title="Failure Simulation Tool",
-        version="0.4.0",
+        version="0.5.0",
         description=(
             "Inject validated HTTP responses into matching requests, or proxy "
             "unmatched traffic to the configured target API."
@@ -124,6 +165,9 @@ def create_app(
     application.state.settings = resolved_settings
     application.state.repository = resolved_repository
     application.state.project_repository = resolved_project_repository
+    application.state.configuration_service = ConfigurationService(
+        resolved_configuration_repository
+    )
     application.state.template_catalog = resolved_template_catalog
     application.state.rule_service = RuleService(
         resolved_repository,
@@ -142,6 +186,7 @@ def create_app(
         resolved_runtime_repository
     )
     application.state.proxy_client = proxy_client
+    application.include_router(configuration_router, prefix=CONTROL_PREFIX)
     application.include_router(projects_router, prefix=CONTROL_PREFIX)
     application.include_router(rules_router, prefix=CONTROL_PREFIX)
     application.include_router(templates_router, prefix=CONTROL_PREFIX)

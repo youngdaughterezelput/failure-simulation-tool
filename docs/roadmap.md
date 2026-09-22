@@ -48,5 +48,5 @@ all other requests -> target API
 - [ ] Malformed or mutated upstream responses.
 - [ ] Advanced request matching.
 - [ ] Multiple projects and target APIs.
-- [ ] Configuration export and import.
+- [x] Configuration export and import.
 - [ ] Kubernetes deployment or cluster integrations.

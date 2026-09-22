@@ -1,4 +1,8 @@
 from app.models.behavior import DecisionReason, RuleBehavior, RuleRuntimeState
+from app.models.configuration import (
+    ConfigurationDocument,
+    ConfigurationImportResult,
+)
 from app.models.history import (
     RequestHistoryCreate,
     RequestHistoryEntry,
@@ -11,6 +15,8 @@ from app.models.template import FailureTemplate, RuleFromTemplateCreate
 __all__ = [
     "FailureRule",
     "FailureTemplate",
+    "ConfigurationDocument",
+    "ConfigurationImportResult",
     "Project",
     "ProjectCreate",
     "DecisionReason",

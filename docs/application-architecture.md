@@ -37,6 +37,7 @@ failure-simulation-tool/
 │   ├── web/                    # browser dashboard
 │   ├── main.py                 # composition root and data-plane entry point
 │   ├── database.py             # SQLite schema, initialization, migrations
+│   ├── configuration_repository.py # atomic configuration snapshots/imports
 │   ├── repository.py           # rule repository interface + implementations
 │   ├── project_repository.py   # project repository interface + implementations
 │   ├── runtime_repository.py   # rule-counter repository + implementations
@@ -58,8 +59,8 @@ This module wires the application together:
 - reads `Settings`;
 - creates SQLite repositories for normal startup or in-memory repositories
   when dependencies are injected by tests;
-- creates `ProjectService`, `RuleService`, `RequestHistoryService`, and
-  `RuleDecisionEngine`;
+- creates `ProjectService`, `RuleService`, `RequestHistoryService`,
+  `ConfigurationService`, and `RuleDecisionEngine`;
 - mounts the UI and control-plane routers at `/_simulator`;
 - processes all data-plane traffic in `simulate_or_proxy`;
 - owns the reusable HTTPX client and converts upstream connection failures into
@@ -76,7 +77,8 @@ These modules are FastAPI adapters for the control plane:
 - `rules.py` exposes rule CRUD, enable/disable, runtime states, reset, and
   template-based creation;
 - `templates.py` exposes the read-only predefined failure catalogue;
-- `history.py` returns recent request decisions.
+- `history.py` returns recent request decisions;
+- `configuration.py` exports and imports a versioned project/rule document.
 
 Routers validate transport input through Pydantic, call an application service
 or catalogue, and translate results into HTTP status codes. Business decisions
@@ -90,7 +92,9 @@ Services implement management use cases:
 - `RuleService` validates project references, creates rules from templates,
   changes enabled state, deletes rules, lists counter states, and resets them;
 - `RequestHistoryService` creates history entries and offers `record_safely`,
-  ensuring a history-storage error does not break the proxied client request.
+  ensuring a history-storage error does not break the proxied client request;
+- `ConfigurationService` exports portable configuration and delegates atomic
+  replacement to an aggregate repository.
 
 Services depend on repository protocols, not on SQLite classes. This keeps the
 business layer testable and allows another storage implementation later.
@@ -123,6 +127,7 @@ Pydantic models define and validate the domain contract:
   decision-reason enum;
 - `template.py`: predefined template and template-based rule request;
 - `history.py`: request outcome and persisted history entry.
+- `configuration.py`: versioned configuration document and import result.
 
 Validation is performed before invalid configuration can reach a repository.
 This includes reserved control paths, HTTP status/delay limits, safe headers,
@@ -138,11 +143,17 @@ Each storage concern has a protocol and two implementations:
 | Projects | `project_repository.py` | `SQLiteProjectRepository` | `InMemoryProjectRepository` |
 | Counters | `runtime_repository.py` | `SQLiteRuleRuntimeRepository` | `InMemoryRuleRuntimeRepository` |
 | History | `history_repository.py` | `SQLiteRequestHistoryRepository` | `InMemoryRequestHistoryRepository` |
+| Configuration | `configuration_repository.py` | `SQLiteConfigurationRepository` | `InMemoryConfigurationRepository` |
 
 `SQLiteDatabase` owns connection creation, transactions, schema initialization,
 initial seed data, and compatible schema migrations. Project and rule
 configuration is serialized as validated JSON. Runtime counters and request
 history use dedicated columns for efficient updates and ordering.
+
+Configuration has an aggregate repository because projects and rules must be
+read consistently and replaced in one transaction. Import preserves request
+history, resets runtime counters, and inserts rules in document order so
+first-match precedence is unchanged.
 
 ### `app/web/`
 

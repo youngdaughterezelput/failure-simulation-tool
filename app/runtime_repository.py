@@ -33,6 +33,11 @@ class InMemoryRuleRuntimeRepository:
     def delete(self, rule_id: UUID) -> None:
         self._states.pop(rule_id, None)
 
+    def clear(self) -> int:
+        count = len(self._states)
+        self._states.clear()
+        return count
+
 
 class SQLiteRuleRuntimeRepository:
     def __init__(self, database: SQLiteDatabase) -> None:

@@ -67,8 +67,9 @@ default; set `DATABASE_PATH` to use another location.
 Open `http://localhost:8080/_simulator` for the web UI. It provides project
 creation, template-based rule creation, probability and request-count settings,
 enable/disable/reset/delete actions, a one-request `Send` action, and recent
-request history. Configuration, counters, and history survive application
-restarts.
+request history. The complete project and rule configuration can also be
+exported to or replaced from a versioned JSON file. Configuration, counters,
+and history survive application restarts.
 
 Projects are organizational groups in the current single-target mode. All
 enabled rules participate in matching; `TARGET_API_URL` remains global for the
@@ -104,6 +105,9 @@ GET    /_simulator/api/templates/{template_id}
 POST   /_simulator/api/rules/from-template/{template_id}
 
 GET    /_simulator/api/history?limit=100
+
+GET    /_simulator/api/configuration/export
+POST   /_simulator/api/configuration/import?dry_run=false
 ```
 
 For example, create a disabled `503 Service Unavailable` rule from a template:

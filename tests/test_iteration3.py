@@ -124,6 +124,8 @@ async def test_web_ui_and_static_assets_are_served(
     assert script.status_code == 200
     assert "class Dashboard" in script.text
     assert "runRefresh" in script.text
+    assert "Export JSON" in page.text
+    assert "importConfiguration" in script.text
     assert 'cache: "no-store"' in script.text
     assert "This path is reserved by the simulator" in script.text
 
